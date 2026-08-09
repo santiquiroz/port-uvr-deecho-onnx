@@ -24,6 +24,28 @@
   "opset": 17,
   "exporter": "legacy JIT (dynamo=False), torch 2.13.0+cpu",
   "models": {
+    "UVR-De-Echo-Normal": {
+      "file": "UVR-De-Echo-Normal.onnx",
+      "primary_stem": "No Echo",
+      "nout": 48,
+      "nn_arch_size": 123821,
+      "source_pth_uvr_hash_md5_tail10MB": "f200a145434efc7dcf0cd093f517ed52",
+      "source_pth_bytes": 127139365,
+      "onnx_sha256": "fc2f9df26060672b72324d6f77a046812361fd8a0dc79ba4f5258a944fc45e14",
+      "onnx_bytes": 126822933,
+      "net_parity_cpu_max_abs": 3.11e-05
+    },
+    "UVR-De-Echo-Aggressive": {
+      "file": "UVR-De-Echo-Aggressive.onnx",
+      "primary_stem": "No Echo",
+      "nout": 48,
+      "nn_arch_size": 123821,
+      "source_pth_uvr_hash_md5_tail10MB": "6857b2972e1754913aad0c9a1678c753",
+      "source_pth_bytes": 127139365,
+      "onnx_sha256": "c5f95ecf29cb0be50144ea0ab461ac920854576df47c3ede82420846f699037c",
+      "onnx_bytes": 126822933,
+      "net_parity_cpu_max_abs": 6.16e-05
+    },
     "UVR-DeEcho-DeReverb": {
       "file": "UVR-DeEcho-DeReverb.onnx",
       "primary_stem": "No Reverb",
