@@ -1,0 +1,10 @@
+.venv/
+artifacts/*.onnx
+artifacts/*.onnx.data
+artifacts/*.npy
+models/
+refs/golden/
+refs/outputs/
+__pycache__/
+dist/
+*.pth

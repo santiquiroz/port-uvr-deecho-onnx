@@ -1,0 +1,12 @@
+# CPU-only toolkit env (py3.11). torch is only needed to load the .pth checkpoints
+# and export ONNX; the driver itself runs torch-free on onnxruntime.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0+cpu
+# Golden reference: python-audio-separator (MIT) -- its uvr_lib_v5/vr_network IS the
+# UVR VR-arch implementation. Only used by toolkit/ scripts, never by driver/.
+audio-separator==0.44.5
+onnx==1.22.0
+# Installed AFTER audio-separator by setup-env.ps1 (replaces the plain onnxruntime
+# wheel audio-separator pulls in) so the DML EP is available for validation/bench:
+# onnxruntime-directml==1.24.4
+pytest
