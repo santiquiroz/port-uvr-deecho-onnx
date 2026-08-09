@@ -116,7 +116,6 @@ Just *running* the published graphs needs none of that: only `driver/` + the
 with a `models-v1.0` release graph:
 
 ```python
-import numpy as np
 import onnxruntime as ort
 import soundfile as sf
 
@@ -139,3 +138,95 @@ Input must be 44.1 kHz (resample first if not — the reference pipeline is defi
 
 ## Status
 
+**Models**: published as GitHub release [`models-v1.0`](https://github.com/santiquiroz/port-uvr-deecho-onnx/releases/tag/models-v1.0) — 3 fp32 `.onnx` graphs + `manifest.json` (source `.pth` UVR hashes, SHA-256 of each graph, measured parity).
+
+All numbers below are measured on real hardware (Ryzen + RX 7800 XT, DirectML), against
+golden dumps produced by audio-separator 0.44.5's own code path on the committed synthetic
+fixture (`toolkit/capture_baseline.py` — 10 s stereo 44.1 kHz with baked-in delay echo +
+noise-reverb tail). Regenerate everything yourself: `make_fixture.py` → `capture_baseline.py`
+→ `validate_ort.py`.
+
+### Parity (toolkit/validate_ort.py — all gates OK, CPU-EP and DirectML)
+
+Gates: mask p99.9 < 1e-4 AND mask RMS < 1e-5; stems SI-SDR > 40 dB. max-abs is printed
+but informational — see "honest numbers" below.
+
+| Model | EP | mask p99.9 | mask RMS | mask max-abs (info) | stems SI-SDR dry/wet | synth-only floor |
+|---|---|---|---|---|---|---|
+| De-Echo-Normal | CPU | 8.9e-06 | 1.1e-06 | 1.1e-04 | 62.5 / 62.6 dB | 62.5 dB |
+| De-Echo-Normal | DML | 1.2e-05 | 1.5e-06 | 1.5e-04 | 62.5 / 62.6 dB | 62.5 dB |
+| De-Echo-Aggressive | CPU | 1.8e-05 | 1.7e-06 | 7.7e-05 | 63.5 / 61.7 dB | 63.5 dB |
+| De-Echo-Aggressive | DML | 1.5e-05 | 1.6e-06 | 1.2e-04 | 63.5 / 61.7 dB | 63.5 dB |
+| DeEcho-DeReverb | CPU | 2.6e-05 | 2.3e-06 | 1.2e-04 | 61.1 / 65.1 dB | 61.1 dB |
+| DeEcho-DeReverb | DML | 3.7e-05 | 3.9e-06 | 4.1e-04 | 61.1 / 65.1 dB | 61.1 dB |
+
+Supporting numbers:
+
+- **Pre-chain** (driver's numpy STFT + polyphase resample chain vs librosa's): combined-spec
+  max-abs **3.9e-06** — the analysis side is numerically interchangeable. Unit-level:
+  STFT ≤ 1.4e-06, iSTFT ≤ 3.0e-07, downsample chain exactly 0.0 (same scipy kernel).
+- **Net-level export parity** (torch vs ONNX CPU-EP, random windows,
+  `toolkit/export_deecho.py`): 3.1e-05 / 6.2e-05 / 1.1e-04 (Normal / Aggressive / DeReverb).
+
+**Honest numbers, two caveats:**
+
+1. **mask max-abs lands at 7.7e-05–4.1e-04, above a naive 1e-4 reading on 5 of 6 rows.** It is
+   outlier-dominated: a handful of sigmoid mid-slope elements absorb the float32
+   reassociation of the graph (verified by feeding the *golden* spectrogram into the ONNX
+   mask path — same max/RMS/p99.9, so it is not driver pre-chain drift). 99.9% of mask
+   elements sit under 3.7e-05 and RMS under 4e-06 on every model/provider, and the stems
+   SI-SDR is *identical* to the synth-only floor — those outliers contribute nothing
+   measurable to the audio. That is why the gate is p99.9+RMS with max-abs printed, not a
+   max-abs gate.
+2. **Stems SI-SDR is 61–65 dB, and that floor is not the mask's fault.** Feeding the
+   golden `y_spec`/`v_spec` through this driver's synthesis chain alone reproduces the same
+   SI-SDR (synth-only column) — the entire divergence is the documented resampler swap
+   (scipy polyphase here vs libsamplerate `sinc_fastest` in the reference's upsample chain).
+   61–65 dB means the error signal sits >60 dB below the stem: far beyond audibility, but
+   it is the real, measured ceiling of this port against audio-separator-on-Windows, so it
+   is reported instead of hidden behind a vague "matches the reference".
+
+### Throughput (toolkit/bench_dml.py — RX 7800 XT, DirectML vs CPU-EP)
+
+One "window" = one network call (`mag [1,2,673,512]`), which advances 384 ROI frames ×
+480-sample hop = **4.18 s of audio**. e2e = `DeEchoDriver.separate()` on the 10 s fixture,
+including the whole numpy pre/post chain (3 network calls). 12 timed runs after 3 warmups.
+
+| Model | EP | ms/window | window realtime | e2e (10 s fixture) | DML speedup (window) |
+|---|---|---|---|---|---|
+| De-Echo-Normal | CPU | 624.6 | 6.7x | 2.27 s (4.4x) | — |
+| De-Echo-Normal | DML | 32.1 | 130.2x | 0.48 s (20.7x) | **19.5x** |
+| De-Echo-Aggressive | CPU | 616.2 | 6.8x | 2.24 s (4.5x) | — |
+| De-Echo-Aggressive | DML | 32.4 | 129.1x | 0.47 s (21.3x) | **19.0x** |
+| DeEcho-DeReverb | CPU | 958.7 | 4.4x | 3.17 s (3.2x) | — |
+| DeEcho-DeReverb | DML | 43.2 | 96.8x | 0.51 s (19.7x) | **22.2x** |
+
+On DirectML the network stops being the bottleneck: ~65–75% of e2e wall time is the numpy
+pre/post chain (STFT/iSTFT/resample), which is why e2e realtime (~20x) sits far below the
+per-window realtime (~100–130x). For long files the pre/post cost scales linearly and the
+gap stays roughly constant; nothing in the driver is O(n²).
+
+## Integration notes (Upflow)
+
+This port follows the same pattern as
+[port-gmfss-onnx](https://github.com/santiquiroz/port-gmfss-onnx) and
+[port-audiosr-onnx](https://github.com/santiquiroz/port-audiosr-onnx): `driver/` is
+self-contained (numpy + scipy + an onnxruntime session the caller owns) and designed to be
+vendored as-is. A caller integrating it needs to: resample input to 44.1 kHz, hand
+`DeEchoDriver.separate()` a `[2, N]` float32 array, and write out whichever stem it wants
+— plus its own session cache / chunking / cancellation policy, which are deliberately out
+of scope here.
+
+## Credits & license
+
+- **Code in this repo**: MIT (see [LICENSE](LICENSE)).
+- **Model weights**: trained by **FoxJoy**, distributed via the official
+  [UVR](https://github.com/Anjok07/ultimatevocalremovergui) Download Center
+  ([TRvlvr/model_repo](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models)).
+  UVR is MIT-licensed. The ONNX graphs in the release are a mechanical format conversion of
+  those weights; all credit for the models belongs to FoxJoy / the UVR project.
+- **Golden reference & vendored architecture**:
+  [python-audio-separator](https://github.com/nomadkaraoke/python-audio-separator) (MIT) —
+  `toolkit/vr_cascaded_net.py` is adapted from its `uvr_lib_v5/vr_network` (one
+  export-neutral pooling change, documented in the file header), and every parity number
+  above is measured against its output.
