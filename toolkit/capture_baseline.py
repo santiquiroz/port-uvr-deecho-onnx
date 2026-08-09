@@ -149,7 +149,7 @@ def capture(name: str, mp: ModelParameters) -> None:
         "window_size": WINDOW_SIZE,
         "batch_size": BATCH_SIZE,
         "librosa": librosa.__version__,
-        "audio_separator": __import__("audio_separator").__version__,
+        "audio_separator": __import__("importlib.metadata", fromlist=["version"]).version("audio-separator"),
         "torch": torch.__version__,
         "combined_spec_shape": list(combined.shape),
         "stem_samples": int(primary.shape[1]),

@@ -1,0 +1,39 @@
+{
+  "source": "TRvlvr/model_repo release all_public_uvr_models (official UVR Download Center)",
+  "models_by": "FoxJoy",
+  "architecture": "UVR VR 5.1 CascadedNet, 4band_v3, n_fft=1344, nout_lstm=128",
+  "graph_io": {
+    "input": {
+      "mag": [
+        1,
+        2,
+        673,
+        512
+      ]
+    },
+    "output": {
+      "mask": [
+        1,
+        2,
+        673,
+        512
+      ]
+    },
+    "note": "Batch fixed at 1 (BiLSTM breaks export with batch > 1; reference runs batch_size=1). Mask is pre-aggression, full window -- driver crops 64-frame offsets and applies the aggression curve."
+  },
+  "opset": 17,
+  "exporter": "legacy JIT (dynamo=False), torch 2.13.0+cpu",
+  "models": {
+    "UVR-DeEcho-DeReverb": {
+      "file": "UVR-DeEcho-DeReverb.onnx",
+      "primary_stem": "No Reverb",
+      "nout": 64,
+      "nn_arch_size": 218409,
+      "source_pth_uvr_hash_md5_tail10MB": "0fb9249ffe4ffc38d7b16243f394c0ff",
+      "source_pth_bytes": 223650277,
+      "onnx_sha256": "fe64dfbbeb744cf8a648a25a473ce319bbfb59771eac01f4ff47a77312839bd3",
+      "onnx_bytes": 223267682,
+      "net_parity_cpu_max_abs": 0.00011307001113891602
+    }
+  }
+}
