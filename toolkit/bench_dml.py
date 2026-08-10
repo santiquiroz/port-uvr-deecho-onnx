@@ -52,8 +52,11 @@ def bench_window(sess: ort.InferenceSession) -> tuple[float, float]:
     return mean_ms, AUDIO_S_PER_WINDOW / (mean_ms / 1000)
 
 
-def bench_e2e(sess: ort.InferenceSession, mix: np.ndarray) -> float:
-    driver = DeEchoDriver(lambda w: sess.run(None, {"mag": w})[0])
+def bench_e2e(sess: ort.InferenceSession, mix: np.ndarray, name: str) -> float:
+    driver = DeEchoDriver(
+        lambda w: sess.run(None, {"mag": w})[0],
+        is_non_accom_stem=MODEL_SPECS[name]["is_non_accom_stem"],
+    )
     t0 = time.perf_counter()
     driver.separate(mix)
     return time.perf_counter() - t0
@@ -71,7 +74,7 @@ def main() -> None:
         for provider in ("cpu", "dml"):
             sess = make_session(name, provider)
             mean_ms, rtf = bench_window(sess)
-            e2e_s = bench_e2e(sess, mix)
+            e2e_s = bench_e2e(sess, mix, name)
             results[provider] = mean_ms
             print(f"  [{provider}] window {mean_ms:.1f} ms ({rtf:.1f}x realtime) | e2e {e2e_s:.2f} s ({audio_s / e2e_s:.1f}x realtime)")
             del sess

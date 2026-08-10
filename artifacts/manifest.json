@@ -27,28 +27,37 @@
     "UVR-De-Echo-Normal": {
       "file": "UVR-De-Echo-Normal.onnx",
       "primary_stem": "No Echo",
+      "secondary_stem": "Echo",
+      "uvr_primary_stem": "No Other",
+      "is_non_accom_stem": false,
       "nout": 48,
       "nn_arch_size": 123821,
       "source_pth_uvr_hash_md5_tail10MB": "f200a145434efc7dcf0cd093f517ed52",
       "source_pth_bytes": 127139365,
       "onnx_sha256": "fc2f9df26060672b72324d6f77a046812361fd8a0dc79ba4f5258a944fc45e14",
       "onnx_bytes": 126822933,
-      "net_parity_cpu_max_abs": 3.11e-05
+      "net_parity_cpu_max_abs": 3.1113624572753906e-05
     },
     "UVR-De-Echo-Aggressive": {
       "file": "UVR-De-Echo-Aggressive.onnx",
       "primary_stem": "No Echo",
+      "secondary_stem": "Echo",
+      "uvr_primary_stem": "No Other",
+      "is_non_accom_stem": false,
       "nout": 48,
       "nn_arch_size": 123821,
       "source_pth_uvr_hash_md5_tail10MB": "6857b2972e1754913aad0c9a1678c753",
       "source_pth_bytes": 127139365,
       "onnx_sha256": "c5f95ecf29cb0be50144ea0ab461ac920854576df47c3ede82420846f699037c",
       "onnx_bytes": 126822933,
-      "net_parity_cpu_max_abs": 6.16e-05
+      "net_parity_cpu_max_abs": 6.16312026977539e-05
     },
     "UVR-DeEcho-DeReverb": {
       "file": "UVR-DeEcho-DeReverb.onnx",
       "primary_stem": "No Reverb",
+      "secondary_stem": "Reverb",
+      "uvr_primary_stem": "No Other",
+      "is_non_accom_stem": false,
       "nout": 64,
       "nn_arch_size": 218409,
       "source_pth_uvr_hash_md5_tail10MB": "0fb9249ffe4ffc38d7b16243f394c0ff",
@@ -56,6 +65,20 @@
       "onnx_sha256": "fe64dfbbeb744cf8a648a25a473ce319bbfb59771eac01f4ff47a77312839bd3",
       "onnx_bytes": 223267682,
       "net_parity_cpu_max_abs": 0.00011307001113891602
+    },
+    "UVR-DeNoise": {
+      "file": "UVR-DeNoise.onnx",
+      "primary_stem": "Noise",
+      "secondary_stem": "No Noise",
+      "uvr_primary_stem": "Other",
+      "is_non_accom_stem": true,
+      "nout": 48,
+      "nn_arch_size": 123821,
+      "source_pth_uvr_hash_md5_tail10MB": "44c55d8b5d2e3edea98c2b2bf93071c7",
+      "source_pth_bytes": 127139365,
+      "onnx_sha256": "3285c155a0f8f7295ad971e1fb43fdcb9d8cdbc493c28aececcddb61af26cc63",
+      "onnx_bytes": 126822933,
+      "net_parity_cpu_max_abs": 6.258487701416016e-06
     }
   }
 }

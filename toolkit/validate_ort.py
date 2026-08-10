@@ -71,7 +71,10 @@ def make_session(name: str, provider: str) -> ort.InferenceSession:
 def validate(name: str, provider: str, mix: np.ndarray) -> list[str]:
     golden = GOLDEN_DIR / name
     sess = make_session(name, provider)
-    driver = DeEchoDriver(lambda window: sess.run(None, {"mag": window})[0])
+    driver = DeEchoDriver(
+        lambda window: sess.run(None, {"mag": window})[0],
+        is_non_accom_stem=MODEL_SPECS[name]["is_non_accom_stem"],
+    )
     failures = []
 
     spec = multiband.wave_to_combined_spec(mix)

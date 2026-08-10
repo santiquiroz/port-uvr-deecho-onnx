@@ -1,4 +1,4 @@
-"""Golden reference capture: run the 3 De-Echo/De-Reverb models through
+"""Golden reference capture: run the De-Echo/De-Reverb/De-Noise models through
 python-audio-separator's own VR code path and dump every intermediate needed to
 gate the ONNX driver.
 
@@ -32,6 +32,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
+from audio_separator.separator.common_separator import CommonSeparator
 from audio_separator.separator.uvr_lib_v5 import spec_utils
 from audio_separator.separator.uvr_lib_v5.vr_network import nets_new
 from audio_separator.separator.uvr_lib_v5.vr_network.model_param_init import ModelParameters
@@ -45,10 +46,15 @@ WINDOW_SIZE = 512
 BATCH_SIZE = 1
 AGGRESSION = 5
 
+# uvr_primary_stem is the raw value the reference looks up in vr_model_data
+# (keyed by the .pth's UVR hash); primary_stem is the human label this repo
+# prints for the same stem. The raw value is what decides is_non_accom_stem,
+# so it is kept verbatim instead of being folded into the label.
 MODELS = {
-    "UVR-De-Echo-Normal": {"nout": 48, "primary_stem": "No Echo"},
-    "UVR-De-Echo-Aggressive": {"nout": 48, "primary_stem": "No Echo"},
-    "UVR-DeEcho-DeReverb": {"nout": 64, "primary_stem": "No Reverb"},
+    "UVR-De-Echo-Normal": {"nout": 48, "primary_stem": "No Echo", "uvr_primary_stem": "No Other"},
+    "UVR-De-Echo-Aggressive": {"nout": 48, "primary_stem": "No Echo", "uvr_primary_stem": "No Other"},
+    "UVR-DeEcho-DeReverb": {"nout": 64, "primary_stem": "No Reverb", "uvr_primary_stem": "No Other"},
+    "UVR-DeNoise": {"nout": 48, "primary_stem": "Noise", "uvr_primary_stem": "Other"},
 }
 
 
@@ -124,8 +130,12 @@ def capture(name: str, mp: ModelParameters) -> None:
         "split_bin": mp.param["band"][1]["crop_stop"],
         "aggr_correction": mp.param.get("aggr_correction"),
     }
-    # "No Echo"/"No Reverb" are not in NON_ACCOM_STEMS -> is_non_accom_stem=False
-    mask_aggr = spec_utils.adjust_aggr(mask_raw.copy(), False, aggressiveness)
+    # VRSeparator.separate: is_non_accom_stem is `primary_stem in NON_ACCOM_STEMS`.
+    # "No Other" (De-Echo/De-Reverb) is not; "Other" (DeNoise) is, which flips the
+    # aggression exponent to 1-aggr. Derived, not hardcoded, so a new model with
+    # any other stem name gets the reference's own answer.
+    is_non_accom_stem = MODELS[name]["uvr_primary_stem"] in CommonSeparator.NON_ACCOM_STEMS
+    mask_aggr = spec_utils.adjust_aggr(mask_raw.copy(), is_non_accom_stem, aggressiveness)
 
     y_spec = np.nan_to_num(mask_aggr * x_mag * np.exp(1.0j * x_phase), nan=0.0, posinf=0.0, neginf=0.0)
     v_spec = np.nan_to_num((1 - mask_aggr) * x_mag * np.exp(1.0j * x_phase), nan=0.0, posinf=0.0, neginf=0.0)
@@ -145,6 +155,8 @@ def capture(name: str, mp: ModelParameters) -> None:
     meta = {
         "fixture": str(FIXTURE.relative_to(REPO)),
         "primary_stem": MODELS[name]["primary_stem"],
+        "uvr_primary_stem": MODELS[name]["uvr_primary_stem"],
+        "is_non_accom_stem": is_non_accom_stem,
         "aggression": AGGRESSION,
         "window_size": WINDOW_SIZE,
         "batch_size": BATCH_SIZE,

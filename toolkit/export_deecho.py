@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from audio_separator.separator.common_separator import CommonSeparator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -39,15 +40,32 @@ PARITY_GATE = 2.5e-4
 # nn_arch_size follows the reference's file-size selector (vr_separator.py);
 # nout/nout_lstm follow vr_model_data. DeReverb's nout=64 is also forced
 # internally by CascadedNet when nn_arch_size == 218409.
+# uvr_primary_stem is the raw vr_model_data value; it decides is_non_accom_stem
+# (and therefore the aggression branch AND which stem is the clean one).
+# DeNoise's mask targets the NOISE, unlike the De-Echo family's dry signal.
 MODELS = {
-    "UVR-De-Echo-Normal": {"nn_arch_size": 123821, "nout": 48, "primary_stem": "No Echo"},
-    "UVR-De-Echo-Aggressive": {"nn_arch_size": 123821, "nout": 48, "primary_stem": "No Echo"},
-    "UVR-DeEcho-DeReverb": {"nn_arch_size": 218409, "nout": 64, "primary_stem": "No Reverb"},
+    "UVR-De-Echo-Normal": {
+        "nn_arch_size": 123821, "nout": 48,
+        "primary_stem": "No Echo", "secondary_stem": "Echo", "uvr_primary_stem": "No Other",
+    },
+    "UVR-De-Echo-Aggressive": {
+        "nn_arch_size": 123821, "nout": 48,
+        "primary_stem": "No Echo", "secondary_stem": "Echo", "uvr_primary_stem": "No Other",
+    },
+    "UVR-DeEcho-DeReverb": {
+        "nn_arch_size": 218409, "nout": 64,
+        "primary_stem": "No Reverb", "secondary_stem": "Reverb", "uvr_primary_stem": "No Other",
+    },
+    "UVR-DeNoise": {
+        "nn_arch_size": 123821, "nout": 48,
+        "primary_stem": "Noise", "secondary_stem": "No Noise", "uvr_primary_stem": "Other",
+    },
 }
 UVR_HASHES = {
     "UVR-De-Echo-Normal": "f200a145434efc7dcf0cd093f517ed52",
     "UVR-De-Echo-Aggressive": "6857b2972e1754913aad0c9a1678c753",
     "UVR-DeEcho-DeReverb": "0fb9249ffe4ffc38d7b16243f394c0ff",
+    "UVR-DeNoise": "44c55d8b5d2e3edea98c2b2bf93071c7",
 }
 
 
@@ -141,6 +159,11 @@ def main() -> None:
         entries[name] = {
             "file": f"{name}.onnx",
             "primary_stem": spec["primary_stem"],
+            "secondary_stem": spec["secondary_stem"],
+            # Consumers need these two to drive the graph correctly: the flag
+            # selects the aggression branch and tells them which stem is clean.
+            "uvr_primary_stem": spec["uvr_primary_stem"],
+            "is_non_accom_stem": spec["uvr_primary_stem"] in CommonSeparator.NON_ACCOM_STEMS,
             "nout": spec["nout"],
             "nn_arch_size": spec["nn_arch_size"],
             "source_pth_uvr_hash_md5_tail10MB": UVR_HASHES[name],

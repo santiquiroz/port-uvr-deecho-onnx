@@ -1,4 +1,4 @@
-"""ONNX driver for the UVR VR De-Echo / De-Reverb models (FoxJoy, 4band_v3).
+"""ONNX driver for the UVR VR De-Echo / De-Reverb / De-Noise models (FoxJoy, 4band_v3).
 
 Torch-free: numpy + scipy pre/post around an onnxruntime session the caller owns.
 The ONNX graphs take one magnitude window [1, 2, 673, 512] and return the full
@@ -21,10 +21,29 @@ from driver.vr_params import AGGR_SPLIT_BIN, OFFSET, WINDOW_SIZE
 
 RunGraph = Callable[[np.ndarray], np.ndarray]
 
+# is_non_accom_stem mirrors the reference's `primary_stem in NON_ACCOM_STEMS`
+# test (common_separator.py). It flips the aggression exponent to `1 - aggr`,
+# so it MUST match the model's UVR primary_stem or the mask is wrong.
+# De-Echo/De-Reverb are "No Other" (not in that tuple); DeNoise is "Other",
+# which also means its mask isolates the NOISE -- primary/secondary are
+# swapped relative to the De-Echo family.
 MODEL_SPECS = {
-    "UVR-De-Echo-Normal": {"primary_stem": "No Echo", "secondary_stem": "Echo", "nout": 48},
-    "UVR-De-Echo-Aggressive": {"primary_stem": "No Echo", "secondary_stem": "Echo", "nout": 48},
-    "UVR-DeEcho-DeReverb": {"primary_stem": "No Reverb", "secondary_stem": "Reverb", "nout": 64},
+    "UVR-De-Echo-Normal": {
+        "primary_stem": "No Echo", "secondary_stem": "Echo", "nout": 48,
+        "uvr_primary_stem": "No Other", "is_non_accom_stem": False,
+    },
+    "UVR-De-Echo-Aggressive": {
+        "primary_stem": "No Echo", "secondary_stem": "Echo", "nout": 48,
+        "uvr_primary_stem": "No Other", "is_non_accom_stem": False,
+    },
+    "UVR-DeEcho-DeReverb": {
+        "primary_stem": "No Reverb", "secondary_stem": "Reverb", "nout": 64,
+        "uvr_primary_stem": "No Other", "is_non_accom_stem": False,
+    },
+    "UVR-DeNoise": {
+        "primary_stem": "Noise", "secondary_stem": "No Noise", "nout": 48,
+        "uvr_primary_stem": "Other", "is_non_accom_stem": True,
+    },
 }
 
 
@@ -45,10 +64,12 @@ def predict_mask(mag_padded: np.ndarray, roi_size: int, run_graph: RunGraph) -> 
     return np.concatenate(rois, axis=2)
 
 
-def adjust_aggression(mask: np.ndarray, aggression: float) -> np.ndarray:
+def adjust_aggression(mask: np.ndarray, aggression: float, is_non_accom_stem: bool = False) -> np.ndarray:
     aggr = (aggression / 100.0) * 2.0
     if aggr == 0:
         return mask
+    if is_non_accom_stem:
+        aggr = 1 - aggr
     adjusted = mask.copy()
     adjusted[:, :AGGR_SPLIT_BIN] = np.power(adjusted[:, :AGGR_SPLIT_BIN], 1 + aggr / 3)
     adjusted[:, AGGR_SPLIT_BIN:] = np.power(adjusted[:, AGGR_SPLIT_BIN:], 1 + aggr)
@@ -56,9 +77,10 @@ def adjust_aggression(mask: np.ndarray, aggression: float) -> np.ndarray:
 
 
 class DeEchoDriver:
-    def __init__(self, run_graph: RunGraph, aggression: float = 5.0):
+    def __init__(self, run_graph: RunGraph, aggression: float = 5.0, is_non_accom_stem: bool = False):
         self.run_graph = run_graph
         self.aggression = aggression
+        self.is_non_accom_stem = is_non_accom_stem
 
     def infer_mask(self, spec: np.ndarray) -> np.ndarray:
         mag = np.abs(spec)
@@ -71,7 +93,7 @@ class DeEchoDriver:
 
     def separate_spec(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         spec = multiband.wave_to_combined_spec(mix)
-        mask = adjust_aggression(self.infer_mask(spec), self.aggression)
+        mask = adjust_aggression(self.infer_mask(spec), self.aggression, self.is_non_accom_stem)
         mag, phase = np.abs(spec), np.angle(spec)
         primary_spec = mask * mag * np.exp(1.0j * phase)
         secondary_spec = (1 - mask) * mag * np.exp(1.0j * phase)
