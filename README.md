@@ -57,7 +57,7 @@ The VR download list has 27 checkpoints; these are the ones deliberately left ou
 
 | Model | Reason |
 |---|---|
-| `UVR-DeNoise-Lite` | **Different band config.** Its `vr_model_data` entry is `1band_sr44100_hl1024` (single band, `n_fft=2048`, hop 1024, 1024 bins, `nout=16`), not `4band_v3` — `driver/multiband.py` is specialised to the 4-band chain, so it would need a second analysis/synthesis path *and* a second graph I/O shape. Not worth it: it is the reduced-quality sibling of `UVR-DeNoise`, which ports cleanly and covers the same job. |
+| `UVR-DeNoise-Lite` | **Different band config — verified, not assumed.** Its checkpoint (`51ea8c43a6928ed3c10ef5cb2707d57b`, 17.9 MB) loads *only* as `1band_sr44100_hl1024` (single band, `n_fft=2048`, hop 1024, 1024 bins, `nout=16`, `nn_arch_size=31191`) and raises a `size_mismatch` if you try to load it as `4band_v3`. `driver/multiband.py` is specialised to the 4-band chain, so supporting it means a second analysis/synthesis path *and* a second graph I/O shape (`[1,2,1025,W]`) *and* its own golden capture. Not worth it: it is the reduced-quality sibling of `UVR-DeNoise`, which ports cleanly and covers the same job. |
 | `UVR-BVE-4B_SN-44100-1` | Backing-vocal extraction, not cleanup — out of scope. Also absent from `vr_model_data`, so the reference falls back to defaults for it. |
 | `17_HP-Wind_Inst-UVR` | Removes wind instruments (`4band_v3`, `No Woodwinds`). Technically portable with this driver, but it is stem separation, not cleanup. |
 | `1_HP`…`16_SP`, `MGM_*` v4 | Vocal/instrumental separation — a different job, already better served by the MDX-Net line. |
