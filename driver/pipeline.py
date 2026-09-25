@@ -21,6 +21,10 @@ from driver.vr_params import AGGR_SPLIT_BIN, OFFSET, WINDOW_SIZE
 
 RunGraph = Callable[[np.ndarray], np.ndarray]
 
+# Synthesis drops the last partial 480-sample hop and the final frames sit on the
+# STFT edge; trailing silence pushes both past N (4096 is what Upflow shipped).
+TAIL_PAD_SAMPLES = 4096
+
 # is_non_accom_stem mirrors the reference's `primary_stem in NON_ACCOM_STEMS`
 # test (common_separator.py). It flips the aggression exponent to `1 - aggr`,
 # so it MUST match the model's UVR primary_stem or the mask is wrong.
@@ -82,6 +86,10 @@ def as_stereo_float32(mix: np.ndarray) -> np.ndarray:
     return _duplicate_mono(mix).astype(np.float32, copy=False)
 
 
+def pad_tail(mix: np.ndarray, n_samples: int) -> np.ndarray:
+    return np.pad(mix, ((0, 0), (0, n_samples)))
+
+
 def make_padding(n_frames: int) -> tuple[int, int, int]:
     roi_size = WINDOW_SIZE - OFFSET * 2
     pad_right = roi_size - (n_frames % roi_size) + OFFSET
@@ -134,8 +142,16 @@ class DeEchoDriver:
         secondary_spec = (1 - mask) * mag * np.exp(1.0j * phase)
         return primary_spec, secondary_spec, mask
 
-    def separate(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def separate(self, mix: np.ndarray, match_input_length: bool = False) -> tuple[np.ndarray, np.ndarray]:
+        if match_input_length:
+            return self._separate_to_input_length(mix)
         primary_spec, secondary_spec, _ = self.separate_spec(mix)
         primary = multiband.combined_spec_to_wave(np.nan_to_num(primary_spec, nan=0.0, posinf=0.0, neginf=0.0))
         secondary = multiband.combined_spec_to_wave(np.nan_to_num(secondary_spec, nan=0.0, posinf=0.0, neginf=0.0))
         return primary, secondary
+
+    def _separate_to_input_length(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        stereo = as_stereo_float32(mix)
+        n_samples = stereo.shape[1]
+        primary, secondary = self.separate(pad_tail(stereo, TAIL_PAD_SAMPLES))
+        return primary[:, :n_samples], secondary[:, :n_samples]

@@ -165,6 +165,16 @@ Input must be 44.1 kHz (resample first if not — the reference pipeline is defi
 stereo. `[N, channels]` (what `sf.read` returns), more than two channels or integer PCM
 raise `ValueError` instead of producing a silently wrong result.
 
+Output length: by default each stem has `480 * floor(N / 480)` samples, the same length
+the reference returns (the multiband iSTFT drops the last partial 480-sample hop), so up
+to 479 samples go missing at the end and an input shorter than 480 samples comes back
+empty. Pass `separate(mix, match_input_length=True)` to get exactly `N` samples: the
+driver appends 4096 samples of silence, separates, and trims back to `N`. Only the tail
+differs from the default: the last graph window now sees that silence, so frames inside
+its context (at most 512 frames × 480 samples) shift slightly — on white noise (σ=0.2)
+ending abruptly, >1e-3 over the last ~1.6 s and >1e-2 only in the last few samples; on
+the fixture, <3e-5. Parity numbers are measured with the default.
+
 For **UVR-DeNoise** the call changes in two ways — pass the flag, and keep the *other* stem:
 
 ```python
