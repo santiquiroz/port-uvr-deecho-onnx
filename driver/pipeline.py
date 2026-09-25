@@ -47,6 +47,41 @@ MODEL_SPECS = {
 }
 
 
+def _require_float(mix: np.ndarray) -> None:
+    if not np.issubdtype(mix.dtype, np.floating):
+        raise ValueError(
+            f"mix must be floating point audio in [-1, 1], got dtype {mix.dtype}; "
+            "scale integer PCM first (e.g. sf.read(..., dtype='float32'))"
+        )
+
+
+def _require_channels_first(mix: np.ndarray) -> None:
+    if mix.ndim != 2 or mix.shape[0] in (1, 2):
+        return
+    if mix.shape[1] in (1, 2):
+        raise ValueError(
+            f"mix has shape {mix.shape}, which looks like [N, channels]; "
+            "the driver expects [channels, N] -- pass mix.T"
+        )
+    raise ValueError(f"mix has {mix.shape[0]} channels; only mono or stereo [<=2, N] is supported")
+
+
+def _duplicate_mono(mix: np.ndarray) -> np.ndarray:
+    if mix.ndim == 2 and mix.shape[0] == 2:
+        return mix
+    mono = mix.reshape(-1)
+    return np.stack([mono, mono])
+
+
+def as_stereo_float32(mix: np.ndarray) -> np.ndarray:
+    mix = np.asarray(mix)
+    if mix.ndim not in (1, 2):
+        raise ValueError(f"mix must be 1-D [N] or 2-D [channels, N], got shape {mix.shape}")
+    _require_float(mix)
+    _require_channels_first(mix)
+    return _duplicate_mono(mix).astype(np.float32, copy=False)
+
+
 def make_padding(n_frames: int) -> tuple[int, int, int]:
     roi_size = WINDOW_SIZE - OFFSET * 2
     pad_right = roi_size - (n_frames % roi_size) + OFFSET
@@ -92,7 +127,7 @@ class DeEchoDriver:
         return mask[:, :, :n_frames]
 
     def separate_spec(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        spec = multiband.wave_to_combined_spec(mix)
+        spec = multiband.wave_to_combined_spec(as_stereo_float32(mix))
         mask = adjust_aggression(self.infer_mask(spec), self.aggression, self.is_non_accom_stem)
         mag, phase = np.abs(spec), np.angle(spec)
         primary_spec = mask * mag * np.exp(1.0j * phase)

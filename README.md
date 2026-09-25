@@ -161,7 +161,9 @@ sf.write("reverb.wav", wet.T, sr)
 ```
 
 Input must be 44.1 kHz (resample first if not — the reference pipeline is defined at
-44.1 kHz). Mono arrays are auto-duplicated to stereo.
+44.1 kHz) and floating point in [-1, 1]. Mono `[N]` or `[1, N]` is duplicated to
+stereo. `[N, channels]` (what `sf.read` returns), more than two channels or integer PCM
+raise `ValueError` instead of producing a silently wrong result.
 
 For **UVR-DeNoise** the call changes in two ways — pass the flag, and keep the *other* stem:
 
