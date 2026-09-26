@@ -23,26 +23,33 @@ def stft(wave: np.ndarray, n_fft: int, hop: int) -> np.ndarray:
     y = np.pad(wave.astype(np.float32, copy=False), pad, mode="constant")
     frames = sliding_window_view(y, n_fft)[::hop]
     spec = np.fft.rfft(frames * hann_periodic(n_fft), axis=-1)
-    return spec.astype(np.complex64).T
+    return spec.astype(np.complex64, copy=False).T
+
+
+def overlap_add(frames: np.ndarray, hop: int) -> np.ndarray:
+    n_frames, n_fft = frames.shape
+    n_chunks = -(-n_fft // hop)
+    blocks = np.zeros((n_frames + n_chunks - 1, hop), dtype=np.float32)
+    # Last chunk first: every output sample then sums its frames in ascending
+    # order, bit-identical to a per-frame loop.
+    for chunk in reversed(range(n_chunks)):
+        start = chunk * hop
+        width = min(hop, n_fft - start)
+        blocks[chunk : chunk + n_frames, :width] += frames[:, start : start + width]
+    return blocks.reshape(-1)[: n_fft + hop * (n_frames - 1)]
 
 
 def istft(spec: np.ndarray, hop: int) -> np.ndarray:
     n_bins, n_frames = spec.shape
     n_fft = 2 * (n_bins - 1)
     window = hann_periodic(n_fft)
-    frames = np.fft.irfft(spec, n=n_fft, axis=0).real.astype(np.float32) * window[:, None]
-    total = n_fft + hop * (n_frames - 1)
-    wave = np.zeros(total, dtype=np.float32)
-    win_sq_sum = np.zeros(total, dtype=np.float32)
-    win_sq = window * window
-    for t in range(n_frames):
-        start = t * hop
-        wave[start : start + n_fft] += frames[:, t]
-        win_sq_sum[start : start + n_fft] += win_sq
-    nonzero = win_sq_sum > np.finfo(np.float32).tiny
-    wave[nonzero] /= win_sq_sum[nonzero]
+    frames = np.fft.irfft(spec.T, n=n_fft, axis=-1).astype(np.float32, copy=False)
+    frames *= window
+    wave = overlap_add(frames, hop)
+    win_sq_sum = overlap_add(np.broadcast_to(window * window, frames.shape), hop)
+    np.divide(wave, win_sq_sum, out=wave, where=win_sq_sum > np.finfo(np.float32).tiny)
     pad = n_fft // 2
-    return wave[pad : total - pad]
+    return wave[pad : wave.shape[0] - pad]
 
 
 def stft_stereo(wave: np.ndarray, n_fft: int, hop: int) -> np.ndarray:

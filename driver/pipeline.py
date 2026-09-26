@@ -119,6 +119,16 @@ def adjust_aggression(mask: np.ndarray, aggression: float, is_non_accom_stem: bo
     return adjusted
 
 
+def zero_non_finite(spec: np.ndarray) -> np.ndarray:
+    if np.isfinite(spec).all():
+        return spec
+    return np.nan_to_num(spec, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def synthesize(spec: np.ndarray) -> np.ndarray:
+    return multiband.combined_spec_to_wave(zero_non_finite(spec))
+
+
 class DeEchoDriver:
     def __init__(self, run_graph: RunGraph, aggression: float = 5.0, is_non_accom_stem: bool = False):
         self.run_graph = run_graph
@@ -131,24 +141,20 @@ class DeEchoDriver:
         pad_left, pad_right, roi_size = make_padding(n_frames)
         mag_padded = np.pad(mag, ((0, 0), (0, 0), (pad_left, pad_right)))
         mag_padded /= mag_padded.max()
-        mask = predict_mask(mag_padded.astype(np.float32), roi_size, self.run_graph)
+        mask = predict_mask(mag_padded.astype(np.float32, copy=False), roi_size, self.run_graph)
         return mask[:, :, :n_frames]
 
     def separate_spec(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         spec = multiband.wave_to_combined_spec(as_stereo_float32(mix))
         mask = adjust_aggression(self.infer_mask(spec), self.aggression, self.is_non_accom_stem)
-        mag, phase = np.abs(spec), np.angle(spec)
-        primary_spec = mask * mag * np.exp(1.0j * phase)
-        secondary_spec = (1 - mask) * mag * np.exp(1.0j * phase)
-        return primary_spec, secondary_spec, mask
+        primary_spec = mask * spec
+        return primary_spec, spec - primary_spec, mask
 
     def separate(self, mix: np.ndarray, match_input_length: bool = False) -> tuple[np.ndarray, np.ndarray]:
         if match_input_length:
             return self._separate_to_input_length(mix)
-        primary_spec, secondary_spec, _ = self.separate_spec(mix)
-        primary = multiband.combined_spec_to_wave(np.nan_to_num(primary_spec, nan=0.0, posinf=0.0, neginf=0.0))
-        secondary = multiband.combined_spec_to_wave(np.nan_to_num(secondary_spec, nan=0.0, posinf=0.0, neginf=0.0))
-        return primary, secondary
+        primary_spec, secondary_spec = self.separate_spec(mix)[:2]
+        return synthesize(primary_spec), synthesize(secondary_spec)
 
     def _separate_to_input_length(self, mix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         stereo = as_stereo_float32(mix)
