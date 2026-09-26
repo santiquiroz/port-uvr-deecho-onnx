@@ -24,6 +24,21 @@ def band_waves(mix: np.ndarray) -> list[np.ndarray]:
     return waves
 
 
+def band_lengths(n_samples: int) -> list[int]:
+    lengths = [0] * len(BANDS)
+    lengths[-1] = n_samples
+    for idx in range(len(BANDS) - 2, -1, -1):
+        lengths[idx] = dsp.resampled_length(lengths[idx + 1], BANDS[idx + 1]["sr"], BANDS[idx]["sr"])
+    return lengths
+
+
+def combined_frame_count(n_samples: int) -> int:
+    return min(
+        dsp.stft_frame_count(length, band["n_fft"], band["hl"])
+        for band, length in zip(BANDS, band_lengths(n_samples))
+    )
+
+
 def combine_spectrograms(specs: list[np.ndarray]) -> np.ndarray:
     n_frames = min(spec.shape[2] for spec in specs)
     combined = np.zeros((2, BINS + 1, n_frames), dtype=np.complex64)

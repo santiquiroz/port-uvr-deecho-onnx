@@ -96,10 +96,21 @@ def make_padding(n_frames: int) -> tuple[int, int, int]:
     return OFFSET, pad_right, roi_size
 
 
+def count_rois(padded_frames: int, roi_size: int) -> int:
+    return (padded_frames - 2 * OFFSET) // roi_size
+
+
+def count_graph_windows(n_samples: int, match_input_length: bool = False) -> int:
+    if match_input_length:
+        n_samples += TAIL_PAD_SAMPLES
+    n_frames = multiband.combined_frame_count(n_samples)
+    pad_left, pad_right, roi_size = make_padding(n_frames)
+    return count_rois(pad_left + n_frames + pad_right, roi_size)
+
+
 def predict_mask(mag_padded: np.ndarray, roi_size: int, run_graph: RunGraph) -> np.ndarray:
-    patches = (mag_padded.shape[2] - 2 * OFFSET) // roi_size
     rois = []
-    for i in range(patches):
+    for i in range(count_rois(mag_padded.shape[2], roi_size)):
         start = i * roi_size
         window = mag_padded[None, :, :, start : start + WINDOW_SIZE]
         mask = run_graph(np.ascontiguousarray(window))[0]

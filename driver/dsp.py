@@ -9,6 +9,8 @@ same polyphase kernel instead -- divergence is measured, not hidden (see README)
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy.signal import resample_poly
@@ -24,6 +26,11 @@ def stft(wave: np.ndarray, n_fft: int, hop: int) -> np.ndarray:
     frames = sliding_window_view(y, n_fft)[::hop]
     spec = np.fft.rfft(frames * hann_periodic(n_fft), axis=-1)
     return spec.astype(np.complex64, copy=False).T
+
+
+def stft_frame_count(n_samples: int, n_fft: int, hop: int) -> int:
+    pad = n_fft // 2
+    return 1 + (n_samples + 2 * pad - n_fft) // hop
 
 
 def overlap_add(frames: np.ndarray, hop: int) -> np.ndarray:
@@ -66,6 +73,12 @@ def resample(wave: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
     gcd = np.gcd(orig_sr, target_sr)
     out = resample_poly(wave, target_sr // gcd, orig_sr // gcd, axis=-1)
     return out.astype(np.float32, copy=False)
+
+
+def resampled_length(n_samples: int, orig_sr: int, target_sr: int) -> int:
+    gcd = math.gcd(orig_sr, target_sr)
+    up, down = target_sr // gcd, orig_sr // gcd
+    return -(-n_samples * up // down)
 
 
 def lp_filter_mask(n_bins: int, bin_start: int, bin_stop: int) -> np.ndarray:

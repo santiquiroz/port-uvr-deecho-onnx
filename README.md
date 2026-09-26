@@ -175,6 +175,11 @@ its context (at most 512 frames × 480 samples) shift slightly — on white nois
 ending abruptly, >1e-3 over the last ~1.6 s and >1e-2 only in the last few samples; on
 the fixture, <3e-5. Parity numbers are measured with the default.
 
+Progress: `count_graph_windows(N, match_input_length=False)` (in `driver.pipeline`) returns
+how many times `separate()` will call `run_graph` for an `N`-sample input, derived from the
+same band lengths and padding the driver uses, so a caller can report "window k of total"
+from inside its `run_graph` without re-deriving the geometry.
+
 For **UVR-DeNoise** the call changes in two ways — pass the flag, and keep the *other* stem:
 
 ```python
